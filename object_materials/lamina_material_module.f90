@@ -42,7 +42,8 @@ module lamina_material_module
 use parameter_module, only : DP, ZERO, ONE, TWO, SMALLNUM, RESIDUAL_MODULUS, &
                            & MSGLENGTH, STAT_SUCCESS, STAT_FAILURE, INTACT,  &
                            & MATRIX_ONSET, FIBRE_ONSET, FIBRE_FAILED,        &
-                           & NDIM, NST => NST_STANDARD
+                           & NDIM, NST => NST_STANDARD, DELTA_PHI, MIN_PHI,  &
+                           & MAX_PHI, HALFCIRC, PI
 
 implicit none
 private
@@ -959,7 +960,7 @@ contains
 
 
 
-  pure subroutine matrix_failure_criterion_3d (this_mat, stress, findex)
+  pure subroutine matrix_failure_criterion_3d (this_mat, stress, findex, phi)
   ! Purpose:
   ! to implement a matrix failure criterion based on the stress and strength
   ! for 3D problems with standard 6 strains.
@@ -970,12 +971,13 @@ contains
   ! to output matrix crack angle w.r.t shell plane
 
     ! list of dummy arguments:
-    ! - this_mat  : lamina object       pass arg.
-    ! - stress    : stress array        passed-in
-    ! - findex    : failure index       to output
+    ! - this_mat  : lamina object            pass arg.
+    ! - stress    : stress array             passed-in
+    ! - findex    : failure index            to output
+    ! - phi       : crack angle w.r.t dir3   to output
     type(lamina_material), intent(in)   :: this_mat
     real(DP),              intent(in)   :: stress(:)
-    real(DP),              intent(out)  :: findex
+    real(DP),              intent(out)  :: findex, phi
 
     ! local variables list:
     ! - Yt, Yc, Sl, St      : lamina strength parameters
@@ -983,13 +985,17 @@ contains
     !                         matrix crack surface
     ! - sigma_1/2/3         : standard normal stress components
     ! - tau_12/13/23        : standard shear stress components
+    ! - phi                 : matrix crack angle
     real(DP)  :: Yt, Yc, Sl, St
     real(DP)  :: tau_n, tau_t, tau_l
     real(DP)  :: sigma_1, sigma_2, sigma_3, tau_12, tau_13, tau_23
+    real(DP)  :: trial_phi, cos1phi, sin1phi, cos2phi, sin2phi
+    real(DP)  :: trial_findex
 
 
     ! initialize local & intent(out) variables
     findex  = ZERO
+    phi     = ZERO
     Yt      = ZERO
     Yc      = ZERO
     Sl      = ZERO
@@ -1003,6 +1009,12 @@ contains
     tau_12  = ZERO
     tau_13  = ZERO
     tau_23  = ZERO
+    trial_phi = ZERO
+    cos1phi = ZERO
+    sin1phi = ZERO
+    cos2phi = ZERO
+    sin2phi = ZERO
+    trial_findex = ZERO
 
 
     ! for private procedures used in the main procedure (ddsdde_lamina),
@@ -1035,16 +1047,39 @@ contains
     !               max. stress
     !           ...
 
-    ! calculate the failure index for tensile failure
-    ! matrix crack is assumed to be perpendicular to shell plane
-    ! no out-plane stress components are considered
+    ! calculate the failure index at phi
+    ! initialize trial_phi at MIN_PHI, exit loop if reaches MAX_PHI
+    trial_phi = MIN_PHI
+    
+    do 
+      ! calculate sin and cos terms of phi and 2*phi
+      cos1phi = cos(trial_phi/HALFCIRC*PI)
+      sin1phi = sin(trial_phi/HALFCIRC*PI)
+      cos2phi = cos(2*trial_phi/HALFCIRC*PI)
+      sin2phi = sin(2*trial_phi/HALFCIRC*PI)
+      
+      ! calculate tractions along crack surface with angle phi
+      tau_n = (sigma_2+sigma_3)/2 + (sigma_2-sigma_3)/2*cos2phi + tau_23*sin2phi
+      tau_t = -(sigma_2-sigma_3)/2*sin2phi + tau_23*cos2phi
+      tau_l = tau_12*cos1phi + tau_13*sin1phi
 
-    tau_n = max(sigma_2, ZERO)
-    tau_t = ZERO
-    tau_l = tau_12
-
-    findex = sqrt( (tau_n/Yt)**2 + (tau_t/St)**2 + (tau_l/Sl)**2 )
-
+      ! calculate trial_findex at trial_phi
+      if (tau_n > ZERO) then ! tensile failure
+        trial_findex = sqrt( (tau_n/Yt)**2 + (tau_t/St)**2 + (tau_l/Sl)**2 )
+      else ! compressive failure (ignore friction)
+        trial_findex = (tau_t/St)**2 + (tau_l/Sl)**2 )
+      end if
+      
+      ! update maximum findex value and phi
+      if (trial_findex > findex) then
+        phi    = trial_phi
+        findex = trial_findex
+      end if
+      
+      ! update trial_phi, exit if exceeds limit
+      trial_phi = trial_phi + DELTA_PHI
+      if (trial_phi > MAX_PHI) exit 
+    end do
 
   end subroutine matrix_failure_criterion_3d
 

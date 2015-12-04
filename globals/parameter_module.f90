@@ -95,7 +95,8 @@ END TYPE
 
 
 ! LAMINA MATERIAL MODULE PARAMETERS --------------------------------------------
-INTEGER, PARAMETER :: MATRIX_ONSET = 5, FIBRE_ONSET  = 15, FIBRE_FAILED  = 20
+INTEGER,  PARAMETER :: MATRIX_ONSET = 5, FIBRE_ONSET  = 15, FIBRE_FAILED  = 20
+REAL(DP), PARAMETER :: DELTA_PHI = 5._DP, MIN_PHI = -45._DP, MAX_PHI = 45._DP
 !-------------------------------------------------------------------------------
 
 
