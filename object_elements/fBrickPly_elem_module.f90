@@ -862,6 +862,7 @@ use global_toolkit_module,  only : crack_elem_centroid2d, crack_elem_cracktip2d
   ! local variable
   character(len=MSGLENGTH)  :: msgloc
   integer                   :: subelstatus
+  real(DP)                  :: subelphi
   real(DP)                  :: coords(NDIM,NNODE)
   integer                   :: nfailedge
   integer                   :: ifailedge(NEDGE_SURF)
@@ -889,6 +890,7 @@ use global_toolkit_module,  only : crack_elem_centroid2d, crack_elem_cracktip2d
   emsg              = ''
   msgloc            = ' failure criterion partition'
   subelstatus       = 0
+  subelphi          = ZERO
   nfailedge         = 0
   ifailedge         = 0
   crackpoints       = ZERO
@@ -953,7 +955,7 @@ use global_toolkit_module,  only : crack_elem_centroid2d, crack_elem_cracktip2d
         return
       end if
       ! proceed if no error
-      call extract(elem%intact_elem, fstat=subelstatus)
+      call extract(elem%intact_elem, fstat=subelstatus, phi=subelphi)
       ! if matrix/fibre failure onset, crack elem from centroid and
       ! find the edge indices of the two cracked edges (jbe1 and jbe2)
       ! the crack_elem_centroid2d subroutine is used for this purpose

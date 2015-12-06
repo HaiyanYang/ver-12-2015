@@ -84,12 +84,14 @@ type, public :: brickPly_elem
   ! stress        : stresses for output
   ! strain        : strains for output
   ! df            : fibre degradation factor for output
+  ! phi           : matrix crack angle
   integer  :: fstat         = 0
   type(program_clock)   :: local_clock
   type(lamina_ig_point) :: ig_points(NIGPOINT)
   real(DP) :: stress(NST)   = ZERO
   real(DP) :: strain(NST)   = ZERO
   real(DP) :: df            = ZERO
+  real(DP) :: phi           = ZERO
 end type
 
 interface integrate
@@ -112,7 +114,7 @@ contains
 
 
 
-pure subroutine extract_brickPly_elem (elem, fstat, ig_points, stress, strain, df)
+pure subroutine extract_brickPly_elem (elem, fstat, ig_points, stress, strain, df, phi)
 ! Purpose:
 ! to extract the components of this element
 ! note that the dummy args connec and ig_points are allocatable arrays
@@ -124,6 +126,7 @@ pure subroutine extract_brickPly_elem (elem, fstat, ig_points, stress, strain, d
   real(DP),                           optional, intent(out) :: stress(NST)
   real(DP),                           optional, intent(out) :: strain(NST)
   real(DP),                           optional, intent(out) :: df
+  real(DP),                           optional, intent(out) :: phi
 
   if (present(fstat))       fstat = elem%fstat
 
@@ -137,6 +140,8 @@ pure subroutine extract_brickPly_elem (elem, fstat, ig_points, stress, strain, d
   if (present(strain))      strain = elem%strain
 
   if (present(df))          df     = elem%df
+  
+  if (present(phi))         phi    = elem%phi
 
 end subroutine extract_brickPly_elem
 
@@ -177,12 +182,13 @@ use global_toolkit_module,       only : crack_elem_centroid2d, determinant3d, &
   ! - elstress        : elem's stress
   ! - elstrain        : elem's strain
   ! - eldf            : elem's df
+  ! - elphi           : elem's phi
   integer             :: elfstat
   type(program_clock) :: local_clock
   type(lamina_ig_point) :: ig_points(NIGPOINT)
   real(DP)            :: elstress(NST)
   real(DP)            :: elstrain(NST)
-  real(DP)            :: eldf
+  real(DP)            :: eldf, elphi
 
   ! the rest are all local variables
 
@@ -213,11 +219,12 @@ use global_toolkit_module,       only : crack_elem_centroid2d, determinant3d, &
   ! - ig_strain, ig_stress : temporary strain and stress vectors for an ig point
   ! - ig_fstat        : extracted fstat from ig point
   ! - ig_df           : extracted fstat from ig point
+  ! - ig_phi          : extracted phi   from ig point
   real(DP)            :: ig_xi(NDIM, NIGPOINT), ig_weight(NIGPOINT)
   type(lamina_sdv)    :: ig_sdv_conv, ig_sdv_iter
   real(DP)            :: ig_x(NDIM), ig_u(NDIM), ig_strain(NST), ig_stress(NST)
   integer             :: ig_fstat
-  real(DP)            :: ig_df
+  real(DP)            :: ig_df, ig_phi
 
   !** variables needed for stiffness matrix derivation:
   ! - fn, dn          : shape functions & their derivatives in natural space
@@ -250,6 +257,7 @@ use global_toolkit_module,       only : crack_elem_centroid2d, determinant3d, &
   elstress        = ZERO
   elstrain        = ZERO
   eldf            = ZERO
+  elphi           = ZERO
   !** nodal variables:
   coords          = ZERO
   u               = ZERO
@@ -269,6 +277,7 @@ use global_toolkit_module,       only : crack_elem_centroid2d, determinant3d, &
   ig_stress       = ZERO
   ig_fstat        = 0
   ig_df           = ZERO
+  ig_phi          = ZERO
   !** variables needed for stiffness matrix derivation:
   fn              = ZERO
   dn              = ZERO
@@ -296,6 +305,7 @@ use global_toolkit_module,       only : crack_elem_centroid2d, determinant3d, &
   ! elstress  : no extraction     ! out
   ! elstrain  : no extraction     ! out
   ! eldf      : no extraction     ! out
+  ! elphi     : no extraction     ! out
   local_clock = elem%local_clock  ! inout
   ig_points   = elem%ig_points    ! inout
 
@@ -427,12 +437,13 @@ use global_toolkit_module,       only : crack_elem_centroid2d, determinant3d, &
       & iterating_sdv=ig_sdv_iter)
 
       ! update elem fstat to be the max current ig point fstat
-      call extract (ig_sdv_iter, fstat=ig_fstat)
-      elfstat  = max(elfstat, ig_fstat)
-
       ! update elem df to be the max current ig point df
-      call extract (ig_sdv_iter, df=ig_df)
-      eldf     = max(eldf,    ig_df)
+      call extract (ig_sdv_iter, fstat=ig_fstat, df=ig_df, phi=ig_phi)
+      if (ig_fstat > elfstat) then
+        elfstat = ig_fstat
+        elphi   = ig_phi
+      end if
+      eldf = max(eldf, ig_df)
 
       ! update elem stress & strain (avg of ig point stress & strains)
       elstress = elstress + ig_stress/real(NIGPOINT, DP)
@@ -453,6 +464,7 @@ use global_toolkit_module,       only : crack_elem_centroid2d, determinant3d, &
       ig_stress=ZERO
       ig_fstat = 0
       ig_df    =ZERO
+      ig_phi   =ZERO
 
   end do loop_igpoint !-looped over all int points. ig=NIGPOINT
 
@@ -469,6 +481,7 @@ use global_toolkit_module,       only : crack_elem_centroid2d, determinant3d, &
 
   ! update intent(inout) dummy arg./its components
   elem%fstat       = elfstat
+  elem%phi         = elphi
   elem%df          = eldf
   elem%stress      = elstress
   elem%strain      = elstrain
