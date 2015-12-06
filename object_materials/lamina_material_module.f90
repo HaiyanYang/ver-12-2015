@@ -90,6 +90,7 @@ type, public :: lamina_sdv
   private
   real(DP) :: df    = ZERO,   u0     = ZERO,   uf     = ZERO
   integer  :: fstat = INTACT, ffstat = INTACT, mfstat = INTACT
+  real(DP) :: phi   = ZERO
 end type lamina_sdv
 ! associated procedures: extract, display
 ! all other operations on the object are performed within this module
@@ -161,7 +162,7 @@ contains
 
 
 
-  pure subroutine extract_lamina_sdv (sdv, df, u0, uf, fstat, ffstat, mfstat)
+  pure subroutine extract_lamina_sdv (sdv, df, u0, uf, fstat, ffstat, mfstat, phi)
 
     type(lamina_sdv),   intent(in)  :: sdv
     real(DP), optional, intent(out) :: df
@@ -170,6 +171,7 @@ contains
     integer,  optional, intent(out) :: fstat
     integer,  optional, intent(out) :: ffstat
     integer,  optional, intent(out) :: mfstat
+    real(DP), optional, intent(out) :: phi
 
     if (present(df))     df     = sdv%df
     if (present(u0))     u0     = sdv%u0
@@ -177,6 +179,7 @@ contains
     if (present(fstat))  fstat  = sdv%fstat
     if (present(ffstat)) ffstat = sdv%ffstat
     if (present(mfstat)) mfstat = sdv%mfstat
+    if (present(phi))    phi    = sdv%phi
 
   end subroutine extract_lamina_sdv
 
@@ -214,6 +217,7 @@ contains
     write(*,display_fmt) 'lamina DF     is: ', this_sdv%DF
     write(*,display_fmt) 'lamina U0     is: ', this_sdv%U0
     write(*,display_fmt) 'lamina UF     is: ', this_sdv%UF
+    write(*,display_fmt) 'lamina phi    is: ', this_sdv%phi
     write(*,'(1X, A)') ''
 
   end subroutine display_lamina_sdv
@@ -394,7 +398,7 @@ contains
     real(DP) :: dee_lcl(NST,NST)
     real(DP) :: stress_lcl(NST)
     integer  :: fstat, ffstat, mfstat
-    real(DP) :: df, u0, uf
+    real(DP) :: df, u0, uf, phi, phi_lcl
     real(DP) :: d_max_lcl
     real(DP) :: findex
 
@@ -412,6 +416,8 @@ contains
     uf        = ZERO
     d_max_lcl = ZERO
     findex    = ZERO
+    phi       = ZERO
+    phi_lcl   = ZERO
 
 
     !**** check validity of non-pass dummy arguments with intent(in/inout) ****
@@ -457,6 +463,7 @@ contains
     df     = sdv%DF
     u0     = sdv%U0
     uf     = sdv%UF
+    phi    = sdv%PHI
     ! copy max. degradation (if present) into local variable d_max_lcl
     if (present(d_max))  then
       d_max_lcl = d_max
@@ -596,7 +603,7 @@ contains
         sdv%DF     = df
         sdv%U0     = u0
         sdv%UF     = uf
-        ! MFSTAT remain unchanged
+        ! MFSTAT and PHI remain unchanged
         ! exit program
         return
 
@@ -607,11 +614,12 @@ contains
         ! check for matrix failure
         if (mfstat == INTACT) then
           ! go through matrix failure criterion and calculate findex
-          call matrix_failure_criterion_3d (this_mat, stress_lcl, findex)
+          call matrix_failure_criterion_3d (this_mat, stress_lcl, findex, phi_lcl)
           ! update mfstat and fstat if matrix failure onset (findex >= 1.)
           if (findex > ONE - SMALLNUM) then
             mfstat = MATRIX_ONSET
             fstat  = mfstat
+            phi    = phi_lcl
             ! no need to update D matrix and stress
             ! (no softening due to matrix failure)
           end if
@@ -622,6 +630,7 @@ contains
         stress     = stress_lcl
         sdv%FSTAT  = fstat
         sdv%MFSTAT = mfstat
+        sdv%PHI    = phi
         ! fibre sdvs remain unchanged
         ! exit program
         return
