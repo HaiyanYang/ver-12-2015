@@ -1076,7 +1076,7 @@ contains
       if (tau_n > ZERO) then ! tensile failure
         trial_findex = sqrt( (tau_n/Yt)**2 + (tau_t/St)**2 + (tau_l/Sl)**2 )
       else ! compressive failure (ignore friction)
-        trial_findex = (tau_t/St)**2 + (tau_l/Sl)**2 )
+        trial_findex = sqrt( (tau_t/St)**2 + (tau_l/Sl)**2 )
       end if
       
       ! update maximum findex value and phi
