@@ -25,6 +25,7 @@ include 'object_elements/fCoh8Delam_elem_module.f90'
 include 'object_elements/fBrickLam_elem_module.f90'
 include 'datalists/material_list_module.f90'
 include 'datalists/node_list_module.f90'
+include 'datalists/edge_list_module.f90'
 include 'datalists/elem_list_module.f90'
 include 'inputs/input_module.f90'
 include 'outputs/output_module.f90'
@@ -133,8 +134,10 @@ subroutine uel(rhs,amatrx,svars,energy,ndofel,nrhs,nsvars, &
 use parameter_module,     only: NDIM, DP, ZERO, MSG_FILE, MSGLENGTH, STAT_SUCCESS, &
                                 & STAT_FAILURE, EXIT_FUNCTION
 use fnode_module,         only: fnode, update
+use fedge_module,         only: fedge
 use node_list_module,     only: node_list
-use elem_list_module,     only: elem_list, elem_node_connec, layup
+use edge_list_module,     only: edge_list
+use elem_list_module,     only: elem_list, elem_node_connec, elem_edge_connec, layup
 use material_list_module, only: UDSinglePly_material, matrixCrack_material, &
                                 & interface_material
 use fBrickLam_elem_module,only: fBrickLam_elem, integrate
@@ -153,11 +156,13 @@ use output_module
   integer                 :: istat
   character(len=MSGLENGTH):: emsg
   character(len=MSGLENGTH):: msgloc
-  real(DP),allocatable    :: Kmat(:,:), Fvec(:)
+  real(DP),   allocatable :: Kmat(:,:), Fvec(:)
   real(DP)                :: uj(NDIM,nnode)
-  !~type(fBrickLam_elem)    :: elem
   type(fnode)             :: nodes(nnode)
   integer                 :: node_cnc(nnode)
+  integer                 :: nedge
+  type(fedge),allocatable :: edges(:)
+  integer,    allocatable :: edge_cnc(:)
   integer                 :: j
   character(len=10)       :: cjelem
 
@@ -168,6 +173,7 @@ use output_module
   msgloc    = ', abaqusUEL_fBrickLam.f'
   uj        = ZERO
   node_cnc  = 0
+  nedge     = 0
   j         = 0
   write(cjelem,'(i5)') jelem
   
@@ -223,6 +229,11 @@ use output_module
  
   ! extract the node connec of this elem
   node_cnc(:) = elem_node_connec(:,jelem)
+  
+  ! extract the edge connec of this elem
+  nedge = size(elem_edge_connec(:,jelem))
+  allocate(edge_cnc(nedge))
+  edge_cnc(:) = elem_edge_connec(:,jelem)
 
   ! extract passed-in nodal solutions obtained by Abaqus Solver
   do j=1, nnode
@@ -236,6 +247,8 @@ use output_module
 
   ! extract nodes and edge status from global node and edge lists
   nodes = node_list(node_cnc)
+  allocate(edges(nedge))
+  edges = edge_list(edge_cnc)
   
   !~! debug, check the input to elem
   !~call output(kstep,jelem*1000+kinc,outdir)
@@ -247,16 +260,16 @@ use output_module
   close(110)
 
   ! integrate this element. elem_list(jelem)
-  call integrate (elem_list(jelem), nodes, layup, UDSinglePly_material, &
+  call integrate (elem_list(jelem), nodes, edges, layup, UDSinglePly_material, &
   &  matrixCrack_material, interface_material, Kmat, Fvec, istat, emsg)
   if (istat == STAT_FAILURE) then
     emsg = trim(emsg)//trim(msgloc)//trim(cjelem)
     write(MSG_FILE,*) emsg
     !** debug **
     node_list(node_cnc) = nodes
+    edge_list(edge_cnc) = edges
     call output(kstep,jelem*10000+kinc,outdir)
     !***********
-    call cleanup (Kmat, Fvec)
     call cleanup_all
     call EXIT_FUNCTION
   end if
@@ -268,6 +281,7 @@ use output_module
 
   ! update to global lists
   node_list(node_cnc) = nodes
+  edge_list(edge_cnc) = edges
   
   ! open a file 
   open(110, file=trim(outdir)//'record.dat', status="replace", action="write")
@@ -277,18 +291,7 @@ use output_module
   ! in the end, pass Kmat and Fvec to Abaqus UEL amatrx and rhs
   amatrx   =  Kmat
   rhs(:,1) = -Fvec(:)
-
-  ! clean up memory used in local dynamic arrays
-  call cleanup (Kmat, Fvec)
-  return
   
-  contains
-  
-  pure subroutine cleanup (Kmat, Fvec)
-    real(DP),allocatable, intent(inout) :: Kmat(:,:), Fvec(:)
-    if(allocated(Kmat)) deallocate(Kmat)
-    if(allocated(Fvec)) deallocate(Fvec)
-  end subroutine cleanup
 
 end subroutine uel
 
@@ -302,10 +305,12 @@ end subroutine uel
 subroutine cleanup_all()
 use material_list_module, only: empty_material_list
 use node_list_module,     only: empty_node_list
+use edge_list_module,     only: empty_edge_list
 use elem_list_module,     only: empty_elem_list
 
   call empty_material_list
   call empty_node_list
+  call empty_edge_list
   call empty_elem_list
 
 end subroutine cleanup_all

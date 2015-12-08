@@ -17,10 +17,8 @@ private
 type, public :: fnode ! a node with enriched d.o.f
   private ! hide components from external operation
   ! list of type components:
-  ! - nstat     : status of this node
   ! - x         : coordinates
   ! - u         : displacement vector
-  integer  :: nstat   = INTACT
   real(DP) :: x(NDIM) = ZERO
   real(DP) :: u(NDIM) = ZERO
 end type fnode
@@ -67,7 +65,6 @@ contains
   
     type(fnode), intent(inout) :: this_fnode
     
-    this_fnode%nstat = INTACT
     this_fnode%x     = ZERO
     this_fnode%u     = ZERO
 
@@ -82,7 +79,6 @@ contains
     type(fnode), intent(in) :: fnode1, fnode2
     type(fnode)             :: fnode3
     
-    ! fnode3 nstat = INTACT, automatic assigned upon definiton
     fnode3%x = fnode1%x + fnode2%x
     fnode3%u = fnode1%u + fnode2%u
 
@@ -97,7 +93,6 @@ contains
     type(fnode), intent(in) :: fnode1, fnode2
     type(fnode)             :: fnode3
     
-    ! fnode3 nstat = INTACT, automatic assigned upon definiton
     fnode3%x = fnode1%x - fnode2%x
     fnode3%u = fnode1%u - fnode2%u
 
@@ -113,7 +108,6 @@ contains
     real(DP),    intent(in) :: r
     type(fnode)             :: fnode3
     
-    ! fnode3 nstat = INTACT, automatic assigned upon definiton
     fnode3%x = r * fnode1%x
     fnode3%u = r * fnode1%u
  
@@ -121,7 +115,7 @@ contains
 
 
 
-  pure subroutine update_fnode (this_fnode, nstat, x, u)
+  pure subroutine update_fnode (this_fnode, x, u)
   ! Purpose:
   ! to update the components of this fnode; it is used both before and during
   ! analysis to set the initial component values and update the runtime 
@@ -129,10 +123,8 @@ contains
   ! flag an error when inputs are not valid
   
     type(fnode),        intent(inout) :: this_fnode
-    integer,  optional, intent(in)    :: nstat
     real(DP), optional, intent(in)    :: x(NDIM), u(NDIM)
-    
-    if (present(nstat)) this_fnode%nstat = nstat    
+     
     if (present(x))     this_fnode%x     = x           
     if (present(u))     this_fnode%u     = u           
 
@@ -140,15 +132,13 @@ contains
   
   
 
-  pure subroutine extract_fnode (this_fnode, nstat, x, u)
+  pure subroutine extract_fnode (this_fnode, x, u)
   ! Purpose:
   ! to extract all the components of this fnode
   
     type(fnode),          intent(in)  :: this_fnode
-    integer,    optional, intent(out) :: nstat
     real(DP),   optional, intent(out) :: x(NDIM),  u(NDIM)
     
-    if(present(nstat)) nstat = this_fnode%nstat
     if(present(x))     x     = this_fnode%x 
     if(present(u))     u     = this_fnode%u
 

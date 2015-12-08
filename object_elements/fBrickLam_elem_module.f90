@@ -267,12 +267,13 @@ end subroutine set_fBrickLam_elem
 
 
 
-pure subroutine integrate_fBrickLam_elem (elem, nodes, layup, plylam_mat, plycoh_mat, &
-& interf_mat, K_matrix, F_vector, istat, emsg)
+pure subroutine integrate_fBrickLam_elem (elem, nodes, edges, layup, &
+& plylam_mat, plycoh_mat, interf_mat, K_matrix, F_vector, istat, emsg)
 
 use parameter_module, only : DP, MSGLENGTH, STAT_SUCCESS, STAT_FAILURE, NDIM, &
                       & ZERO, NDIM, TRANSITION_ELEM
 use fnode_module,             only : fnode
+use fedge_module,             only : fedge
 use lamina_material_module,   only : lamina_material, lamina_scaled_Gfc
 use cohesive_material_module, only : cohesive_material
 use fBrickPly_elem_module,    only : extract, integrate
@@ -281,6 +282,7 @@ use global_toolkit_module,    only : assembleKF
 
   type(fBrickLam_elem),     intent(inout) :: elem
   type(fnode),              intent(inout) :: nodes(:)
+  type(fedge),              intent(inout) :: edges(:)
   type(plyblock_layup),     intent(in)    :: layup(:)
   type(lamina_material),    intent(in)    :: plylam_mat
   type(cohesive_material),  intent(in)    :: plycoh_mat
@@ -292,15 +294,17 @@ use global_toolkit_module,    only : assembleKF
 
   ! local variables
   character(len=MSGLENGTH) :: msgloc
-  integer                  :: nplyblks, ninterfs, nnodettl, ndof
+  integer                  :: nplyblks, ninterfs, nnodettl, nedgettl, ndof
+  integer                  :: plyblk_edge_array(NEDGE)
   type(fnode)              :: plyblknds(NNODE_PLYBLK), interfnds(NNODE_INTERF)
+  type(fedge)              :: plyblkegs(NEDGE)
   type(lamina_material)    :: plyblklam_mat
   real(DP)                 :: theta1, theta2
   real(DP), allocatable    :: Ki(:,:), Fi(:)
   logical                  :: topsurf_set, botsurf_set
   integer                  :: plyblk_status, plyblk_egstatus_lcl(NEDGE/2)
   ! loop counters
-  integer :: i
+  integer :: i, j
 
   ! initialize intent out and local variables
   istat       = STAT_SUCCESS
@@ -309,19 +313,22 @@ use global_toolkit_module,    only : assembleKF
   nplyblks    = 0
   ninterfs    = 0
   nnodettl    = 0
+  nedgettl    = 0
   ndof        = 0
+  plyblk_edge_array = 0
   theta1      = ZERO
   theta2      = ZERO
   topsurf_set = .false.
   botsurf_set = .false.
   plyblk_status       = 0
   plyblk_egstatus_lcl = 0
-  i=0
+  i=0; j=0
   
   ! extract no. plyblock and no. interfaces from layup, extract total no. nodes
   nplyblks = size(layup)
   ninterfs = nplyblks - 1
   nnodettl = size(nodes)
+  nedgettl = size(edges)
 
   !**** debug checks (comment after debugging) ****
   ! check if the elem has been set by checking plyblks.
@@ -344,6 +351,12 @@ use global_toolkit_module,    only : assembleKF
     emsg  = 'nodes size does not match layup'//trim(msgloc)
     return
   end if
+  
+  if (nedgettl /= nplyblks*NEDGE) then
+    istat = STAT_FAILURE
+    emsg  = 'edges size does not match layup'//trim(msgloc)
+    return
+  end if
   !**** end debug checks (comment after debugging) ****
   
   ! initialize K & F
@@ -357,14 +370,16 @@ use global_toolkit_module,    only : assembleKF
   !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::!
   loop_plyblks: do i = 1, nplyblks
   
-      ! extract nodes and edge status of this plyblk for integration
-      plyblknds = nodes(elem%plyblks_nodes(i)%array)
+      ! extract nodes and edges of this plyblk for integration
+      plyblk_edge_array = [(j, j = (i-1)*NEDGE+1, i*NEDGE)]
+      plyblknds         = nodes(elem%plyblks_nodes(i)%array)
+      plyblkegs         = edges(plyblk_edge_array)
       
       ! increase fibre toughness w.r.t no. plies in this plyblock
       plyblklam_mat = lamina_scaled_Gfc(plylam_mat, layup(i)%nplies)
       
       ! integrate this plyblk elem and update its nodes and edge status
-      call integrate (elem%plyblks(i), plyblknds, layup(i)%angle, &
+      call integrate (elem%plyblks(i), plyblknds, plyblkegs, layup(i)%angle, &
       & plyblklam_mat, plycoh_mat, Ki, Fi, istat, emsg)
       if (istat == STAT_FAILURE) exit loop_plyblks
       
@@ -373,8 +388,9 @@ use global_toolkit_module,    only : assembleKF
       & NDIM, istat, emsg)
       if (istat == STAT_FAILURE) exit loop_plyblks
       
-      ! update nodes
+      ! update nodes and edges
       nodes(elem%plyblks_nodes(i)%array) = plyblknds
+      edges(plyblk_edge_array)           = plyblkegs
       
   end do loop_plyblks
   
