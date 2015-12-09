@@ -24,11 +24,11 @@ type, public :: fedge
 end type fedge
 
 interface update
-  module procedure update_fnode
+  module procedure update_fedge
 end interface
 
 interface extract
-  module procedure extract_fnode
+  module procedure extract_fedge
 end interface
 
 
