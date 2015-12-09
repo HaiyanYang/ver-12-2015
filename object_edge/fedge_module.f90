@@ -32,7 +32,7 @@ interface extract
 end interface
 
 
-public :: empty, update, extract
+public :: update, extract
 
 
 

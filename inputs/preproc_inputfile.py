@@ -82,6 +82,7 @@ uel_elems = open(uelelemsfile,'w')
 #   Open Fortran modules to be written during pre-processing
 #***************************************************************
 fnm_nodes = open('fnm_nodes.f90','w')  # list of all nodes
+fnm_edges = open('fnm_edges.f90','w')  # list of all nodes
 fnm_elems = open('fnm_elems.f90','w')  # list of all elems
 
 
@@ -522,6 +523,22 @@ fnm_nodes.write('end subroutine set_fnm_nodes\n')
 
 
 #***************************************************************
+#       write edges
+#*************************************************************** 
+# find the total no. of edges in this mesh
+nedgett = nplyblk * nedge_p  
+# write fnm_edges.f90 header
+fnm_edges.write('subroutine set_fnm_edges()            \n')
+fnm_edges.write('use edge_list_module, only: edge_list \n')
+fnm_edges.write('                                      \n')
+fnm_edges.write('  integer :: nedge=0                  \n')
+fnm_edges.write('                                      \n')
+fnm_edges.write('  nedge='+str(nedgett)+'              \n')
+fnm_edges.write('  allocate(edge_list(nedge))          \n')
+fnm_edges.write('\n')
+fnm_edges.write('end subroutine set_fnm_edges\n')
+
+#***************************************************************
 #       write elems
 #***************************************************************   
 # find no. of elems in a ply mesh
@@ -775,6 +792,8 @@ uel_input.close()
 #   close nodes files
 fnm_nodes.close()
 uel_nodes.close()
+#   close edges file
+fnm_edges.close()
 #   close elems files
 fnm_elems.close()
 uel_elems.close()

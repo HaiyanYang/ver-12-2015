@@ -12,6 +12,7 @@ include 'globals/global_toolkit_module.f90'
 include 'object_materials/lamina_material_module.f90'
 include 'object_materials/cohesive_material_module.f90'
 include 'object_node/fnode_module.f90'
+include 'object_edge/fedge_module.f90'
 include 'object_elements/base_elements/brickPly_elem_module.f90'
 include 'object_elements/base_elements/wedgePly_elem_module.f90'
 include 'object_elements/base_elements/coh8Crack_elem_module.f90'
@@ -39,7 +40,7 @@ include 'outputs/output_module.f90'
 subroutine uexternaldb(lop,lrestart,time,dtime,kstep,kinc)
 use parameter_module,    only: DP, DIRLENGTH, MSG_FILE, EXIT_FUNCTION
 use global_clock_module, only: GLOBAL_CLOCK, set
-use input_module,        only: set_fnm_nodes, set_fnm_elems, set_fnm_materials
+use input_module,        only: set_fnm_nodes, set_fnm_edges, set_fnm_elems, set_fnm_materials
 use output_module,       only: outdir, output
 
   implicit none
@@ -83,6 +84,8 @@ use output_module,       only: outdir, output
       call set(GLOBAL_CLOCK, curr_step=0, curr_inc=0)
       
       call set_fnm_nodes
+      
+      call set_fnm_edges
       
       call set_fnm_elems
       

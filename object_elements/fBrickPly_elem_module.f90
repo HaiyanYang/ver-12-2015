@@ -720,10 +720,10 @@ use global_toolkit_module, only : crack_elem_cracktip2d
       coords(3,  jnode)=ztop
       call update(nodes(jnode), x=coords(:,jnode))
       
-      ! extract the phi of edge jbe1 to elphi, and update that of edge jbe2 & jbe2+nedge
-      call extract(edges(jbe1),       phi=elphi)
-      call update (edges(jbe2),       phi=elphi)
-      call update (edges(jbe2+NEDGE), phi=elphi)
+      ! extract the phi of edge jbe1 to elphi, and update that of edge jbe2 & jbe2+nedge_surf
+      call extract(edges(jbe1), phi=elphi)
+      call update (edges(jbe2), phi=elphi)
+      call update (edges(jbe2+NEDGE_SURF), phi=elphi)
       
       ! update elem phi
       elem%phi = elphi 
@@ -734,8 +734,8 @@ use global_toolkit_module, only : crack_elem_cracktip2d
     call update(edges(jbe1), estat=eledgestatus_lcl(jbe1))
     call update(edges(jbe2), estat=eledgestatus_lcl(jbe2))
     ! update top surf edge status
-    call update(edges(jbe1+NEDGE), estat=eledgestatus_lcl(jbe1))
-    call update(edges(jbe2+NEDGE), estat=eledgestatus_lcl(jbe2))
+    call update(edges(jbe1+NEDGE_SURF), estat=eledgestatus_lcl(jbe1))
+    call update(edges(jbe2+NEDGE_SURF), estat=eledgestatus_lcl(jbe2))
 
     ! update elem partition when changing from intact or trans. elem
     if (elem%curr_status == INTACT .or. &
@@ -1200,8 +1200,8 @@ use global_toolkit_module,  only : crack_elem_centroid2d, crack_elem_cracktip2d
     call update(edges(jbe1), estat=COH_CRACK_EDGE)
     call update(edges(jbe2), estat=COH_CRACK_EDGE)
     ! update top surf edge status
-    call update(edges(jbe1+NEDGE), estat=COH_CRACK_EDGE)
-    call update(edges(jbe2+NEDGE), estat=COH_CRACK_EDGE)    
+    call update(edges(jbe1+NEDGE_SURF), estat=COH_CRACK_EDGE)
+    call update(edges(jbe2+NEDGE_SURF), estat=COH_CRACK_EDGE)    
 
     !:::: update elem partition ::::!
     ! only updates partition when changing from intact and trans elem
