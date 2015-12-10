@@ -1126,6 +1126,12 @@ use global_toolkit_module,  only : crack_elem_centroid2d
       coords(3,  jnode)=ztop
       call update(nodes(jnode), x=coords(:,jnode))
       
+      ! update the phi of the two pairs of edges
+      call update (edges(jbe1), phi=subelphi)
+      call update (edges(jbe1+NEDGE_SURF), phi=subelphi)
+      call update (edges(jbe2), phi=subelphi)
+      call update (edges(jbe2+NEDGE_SURF), phi=subelphi)
+      
       ! update elem phi to be the phi of intact subelem
       elem%phi = subelphi
       
@@ -1417,8 +1423,9 @@ pure subroutine integrate_assemble_subelems (elem, nodes, ply_angle, lam_mat, co
 use parameter_module, only : MSGLENGTH, STAT_SUCCESS, STAT_FAILURE,         &
                       & DP, NDIM, ZERO, ONE, PENALTY_STIFFNESS, INTACT,     &
                       & TRANSITION_ELEM, REFINEMENT_ELEM,   CRACK_TIP_ELEM, &
-                      & CRACK_WAKE_ELEM, MATRIX_CRACK_ELEM, CRACK_TIP_EDGE
-use fnode_module,             only : fnode
+                      & CRACK_WAKE_ELEM, MATRIX_CRACK_ELEM, CRACK_TIP_EDGE, &
+                      & HALFCIRC, PI, SMALLNUM
+use fnode_module,             only : fnode, extract, update
 use lamina_material_module,   only : lamina_material
 use cohesive_material_module, only : cohesive_material
 use brickPly_elem_module,     only : integrate
@@ -1537,7 +1544,7 @@ use global_toolkit_module,    only : assembleKF
         return
       end if
       ! integrate and assmeble cohCrack
-      call integrate_assemble_cohCrack (elem, nodes, coh_mat, &
+      call integrate_assemble_cohCrack (elem, nodes, ply_angle, coh_mat, &
       & K_matrix, F_vector, istat, emsg, nofail)
       if (istat == STAT_FAILURE) then
         emsg = trim(emsg)//trim(msgloc)
@@ -1683,10 +1690,11 @@ use global_toolkit_module,    only : assembleKF
   end subroutine integrate_assemble_subBulks
 
 
-  pure subroutine integrate_assemble_cohCrack (elem, nodes, coh_mat, &
+  pure subroutine integrate_assemble_cohCrack (elem, nodes, ply_angle, coh_mat, &
   & K_matrix, F_vector, istat, emsg, nofail)
     type(fBrickPly_elem),     intent(inout) :: elem
     type(fnode),              intent(in)    :: nodes(NNODE)
+    real(DP),                 intent(in)    :: ply_angle
     type(cohesive_material),  intent(in)    :: coh_mat
     real(DP),                 intent(inout) :: K_matrix(NDOF,NDOF)
     real(DP),                 intent(inout) :: F_vector(NDOF)
@@ -1695,10 +1703,74 @@ use global_toolkit_module,    only : assembleKF
     logical,                  intent(in)    :: nofail
 
     real(DP), allocatable :: Ki(:,:), Fi(:)
+    type(fnode) :: rotnodes(8)      ! rotated nodes
+    real(DP)    :: coords(NDIM,8)   ! coordinates of coh nodes
+    real(DP)    :: xj(NDIM)         ! coordinates of node j
+    real(DP)    :: phi              ! matrix crack phi angle
+    real(DP)    :: h                ! height of the crack
+    real(DP)    :: delta            ! inplane coords correction w.r.t phi
+    real(DP)    :: delta_x, delta_y ! x, y components of delta
+    
+    integer :: nndcoh
+    integer :: j
+    
+    ! initialize local variables
+    coords = ZERO
+    xj     = ZERO
+    phi    = ZERO
+    h      = ZERO
+    delta  = ZERO
+    delta_x= ZERO
+    delta_y= ZERO
+    nndcoh = 0
+    j      = 0
+    
+    ! no. of nodes in the coh crack elem = 8
+    nndcoh = 8
+    
+    ! extract coh crack nodes from passed-in nodes array
+    rotnodes = nodes(elem%cohCrack_nodes%array)
+    
+    ! extract nodal coordinates of coh crack elem
+    do j=1, nndcoh
+      ! extract x from rotnodes
+      call extract(rotnodes(j), x=xj)
+      coords(:,j) = xj(:)
+    end do
+    
+    ! calculate h (dir-3 is dir-z)
+    h = maxval(coords(3,:))-minval(coords(3,:))
+    
+    ! extract matrix crack slanting angle phi
+    phi = elem%phi
+    
+    ! adjust rotnodes coordinates if phi is nonzero
+    if (abs(phi) > SMALLNUM) then
+    
+      ! calculate delta
+      delta = h/2 * tan(phi/HALFCIRC*PI)
+      
+      ! calculate delta_x and delta_y based on ply_angle
+      delta_x = - delta * sin(ply_angle/HALFCIRC*PI)
+      delta_y =   delta * cos(ply_angle/HALFCIRC*PI)
+      
+      ! update the coordinates of rotnodes
+      do j=1, nndcoh
+        select case (j)
+        case (1, 2, 5, 6) ! top surf nodes
+          xj = coords(:,j) + [delta_x,delta_y,ZERO]
+          call update(rotnodes(j), x=xj)
+        case (3, 4, 7, 8) ! bot surf nodes
+          xj = coords(:,j) - [delta_x,delta_y,ZERO]
+          call update(rotnodes(j), x=xj)
+        end select
+      end do
+    
+    end if
+    
 
     ! integrate coh crack    
-    call integrate (elem%cohCrack, nodes(elem%cohCrack_nodes%array), &
-    & coh_mat, Ki, Fi, istat, emsg, nofail)
+    call integrate (elem%cohCrack, rotnodes, coh_mat, Ki, Fi, istat, emsg, nofail)
     if (istat == STAT_FAILURE) then
       return
     end if

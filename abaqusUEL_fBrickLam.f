@@ -28,6 +28,7 @@ include 'datalists/material_list_module.f90'
 include 'datalists/node_list_module.f90'
 include 'datalists/edge_list_module.f90'
 include 'datalists/elem_list_module.f90'
+include 'datalists/predelam_list_module.f90'
 include 'inputs/input_module.f90'
 include 'outputs/output_module.f90'
 !------------------------------------------------------
@@ -40,7 +41,8 @@ include 'outputs/output_module.f90'
 subroutine uexternaldb(lop,lrestart,time,dtime,kstep,kinc)
 use parameter_module,    only: DP, DIRLENGTH, MSG_FILE, EXIT_FUNCTION
 use global_clock_module, only: GLOBAL_CLOCK, set
-use input_module,        only: set_fnm_nodes, set_fnm_edges, set_fnm_elems, set_fnm_materials
+use input_module,        only: set_fnm_nodes, set_fnm_edges, set_fnm_elems, &
+                         &     set_fnm_materials, set_fnm_predelam
 use output_module,       only: outdir, output
 
   implicit none
@@ -90,6 +92,8 @@ use output_module,       only: outdir, output
       call set_fnm_elems
       
       call set_fnm_materials
+      
+      call set_fnm_predelam
       
       ! open a file 
       open(110, file=trim(outdir)//'record.dat', status="replace", action="write")
@@ -143,6 +147,7 @@ use edge_list_module,     only: edge_list
 use elem_list_module,     only: elem_list, elem_node_connec, elem_edge_connec, layup
 use material_list_module, only: UDSinglePly_material, matrixCrack_material, &
                                 & interface_material
+use predelam_list_module, only: predelam_elems, predelam_interf
 use fBrickLam_elem_module,only: fBrickLam_elem, integrate
 use output_module
 
@@ -166,6 +171,7 @@ use output_module
   integer                 :: nedge
   type(fedge),allocatable :: edges(:)
   integer,    allocatable :: edge_cnc(:)
+  integer                 :: predelam
   integer                 :: j
   character(len=10)       :: cjelem
 
@@ -177,6 +183,7 @@ use output_module
   uj        = ZERO
   node_cnc  = 0
   nedge     = 0
+  predelam  = 0
   j         = 0
   write(cjelem,'(i5)') jelem
   
@@ -261,10 +268,17 @@ use output_module
   open(110, file=trim(outdir)//'record.dat', status="replace", action="write")
   write(110,'(1X, a)')'reach mark 2'
   close(110)
+  
+  ! check if this elem belongs to the predelam elem set, predelam_elems
+  ! if so, update variable predelam
+  ! predelam default value = 0
+  if (allocated(predelam_elems)) then
+    if ( any ( predelam_elems == jelem ) ) predelam = predelam_interf 
+  end if
 
   ! integrate this element. elem_list(jelem)
   call integrate (elem_list(jelem), nodes, edges, layup, UDSinglePly_material, &
-  &  matrixCrack_material, interface_material, Kmat, Fvec, istat, emsg)
+  &  matrixCrack_material, interface_material, Kmat, Fvec, istat, emsg, predelam)
   if (istat == STAT_FAILURE) then
     emsg = trim(emsg)//trim(msgloc)//trim(cjelem)
     write(MSG_FILE,*) emsg
@@ -310,10 +324,12 @@ use material_list_module, only: empty_material_list
 use node_list_module,     only: empty_node_list
 use edge_list_module,     only: empty_edge_list
 use elem_list_module,     only: empty_elem_list
+use predelam_list_module, only: empty_predelam_list
 
   call empty_material_list
   call empty_node_list
   call empty_edge_list
   call empty_elem_list
+  call empty_predelam_list
 
 end subroutine cleanup_all

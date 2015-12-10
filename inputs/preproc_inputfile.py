@@ -84,6 +84,7 @@ uel_elems = open(uelelemsfile,'w')
 fnm_nodes = open('fnm_nodes.f90','w')  # list of all nodes
 fnm_edges = open('fnm_edges.f90','w')  # list of all nodes
 fnm_elems = open('fnm_elems.f90','w')  # list of all elems
+fnm_predelam = open('fnm_predelam.f90','w') # list of all predelam elems and the predelam interf
 
 
 #***************************************************************
@@ -305,9 +306,11 @@ for jp in jparts:
 # - multiple nsets are supported
 # - 'generate' operation in nset is supported
 # - no translation or similar operations on a instance is supported
-# - elset is currently not yet supported
+# - predelam elset is supported
+# - other elsets are currently not supported
 #==================================================
 assemblies = [] # list of all assemblies in the model
+predelam   = [] # predelam elset (only one) in the model
 
 # find the line no. of *Assembly and store in jassemblies
 jassemblies = [j for j,line in enumerate(All_lines) if '*Assembly' in line]
@@ -401,7 +404,52 @@ for ja in jassemblies:
         # update this nset in assembly
         assemblies[-1].nsets[-1] = nst 
     
-    # read elsets in this assembly (NOT YET SUPPORTED)
+    # read predelam elset in this assembly
+    for jels in jelsets:
+        eline = All_lines[jels].rstrip()
+        # break out of for loop if elset is not a predelam elset
+        if(not 'predelam' in eline):
+            break
+        # remove 'generate' in the line if present
+        if ('generate' in All_lines[jels]):
+            eline = All_lines[jels][0:-11]
+        # add this elset in the list of predelam in this model
+        predelam.append( elset( name=eline, elems=[] ) )
+        # read elems in the elset
+        # if generate is used, then calculate all elems;
+        # otherwise, read all elems directly
+        if ('generate' in All_lines[jels]):
+            eline = All_lines[jels+1]
+            el = []
+            for t in eline.split(','):
+                try:
+                    el.append(int(t))
+                except ValueError:
+                    pass
+            els = el[0] # start elem
+            elf = el[1] # final elem
+            try:
+                itv = el[2] # interval
+            except IndexError:
+                itv = 1
+            for e in range(els,elf+1,itv):
+                predelam[-1].elems.append(e)
+        else:
+            # read the lines of nodes in this nset
+            el = [] # list of elems to be filled
+            for e in range(jels+1,lenAll):
+                eline = All_lines[e]
+                # break out of loop if end of section encountered
+                if ('*' in eline):
+                    break
+                for t in eline.split(','):
+                    try:
+                        el.append(int(t))
+                    except ValueError:
+                        pass
+            predelam[-1].elems.extend(el)
+            
+    # read other elsets in this assembly (NOT YET SUPPORTED)
 
     ## check assembly correctness
     #print(assemblies[-1].name)
@@ -444,7 +492,7 @@ step = []
 step.extend(All_lines[jdash:])
 #print(step)
 
-
+   
 
 
 #***************************************************************
@@ -683,6 +731,42 @@ fnm_elems.write('end subroutine set_fnm_elems\n')
 
 
 #***************************************************************
+#       write predelam
+#*************************************************************** 
+# write fnm_predelam.f90 header
+fnm_predelam.write('subroutine set_fnm_predelam()         \n')
+fnm_predelam.write('use predelam_list_module, only: predelam_elems, predelam_interf \n')
+fnm_predelam.write('                                      \n')
+fnm_predelam.write('  integer :: npdelem                  \n')
+fnm_predelam.write('                                      \n')
+
+# write the elem indices in the predelam elset
+for pd in predelam:
+    npdelem = len(pd.elems)
+    fnm_predelam.write('  npdelem='+str(npdelem)+'              \n')
+    fnm_predelam.write('\n')
+    fnm_predelam.write('  allocate(predelam_elems(npdelem))     \n')
+    fnm_predelam.write('  allocate(predelam_interf)             \n')
+    fnm_predelam.write('\n')
+    # write all elems in the predelam elset
+    for j,jel in enumerate(pd.elems):
+        fnm_predelam.write('  predelam_elems('+str(j+1)+')='+str(jel)+'\n')
+    # ask for the predelam interface no.
+    pdinterf = \
+    input('Enter the pre-delamination interface, \
+    1 means the first interface from the bottom (positive integer number):')
+    while ( not ( isinstance(pdinterf, int) and pdinterf > 0 ) ):
+        pdinterf = \
+        input('Enter the pre-delamination interface, \
+        1 means the first interface from the bottom (positive integer number):')
+    fnm_predelam.write('\n')
+    fnm_predelam.write('  predelam_interf='+str(pdinterf)+'\n')
+
+fnm_predelam.write('\n')
+fnm_predelam.write('end subroutine set_fnm_predelam\n') 
+
+
+#***************************************************************
 #       write uel input file
 #*************************************************************** 
 #**** write HEADER ****
@@ -797,6 +881,8 @@ fnm_edges.close()
 #   close elems files
 fnm_elems.close()
 uel_elems.close()
+#   close predelam file
+fnm_predelam.close()
 
 
 #*************************************************************** 

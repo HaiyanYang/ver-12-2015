@@ -268,7 +268,7 @@ end subroutine set_fBrickLam_elem
 
 
 pure subroutine integrate_fBrickLam_elem (elem, nodes, edges, layup, &
-& plylam_mat, plycoh_mat, interf_mat, K_matrix, F_vector, istat, emsg)
+& plylam_mat, plycoh_mat, interf_mat, K_matrix, F_vector, istat, emsg, predelam_interf)
 
 use parameter_module, only : DP, MSGLENGTH, STAT_SUCCESS, STAT_FAILURE, NDIM, &
                       & ZERO, NDIM, TRANSITION_ELEM
@@ -290,6 +290,7 @@ use global_toolkit_module,    only : assembleKF
   real(DP),    allocatable, intent(out)   :: K_matrix(:,:), F_vector(:)
   integer,                  intent(out)   :: istat
   character(len=MSGLENGTH), intent(out)   :: emsg
+  integer,     optional,    intent(in)    :: predelam_interf
 
 
   ! local variables
@@ -303,6 +304,7 @@ use global_toolkit_module,    only : assembleKF
   real(DP), allocatable    :: Ki(:,:), Fi(:)
   logical                  :: topsurf_set, botsurf_set
   integer                  :: plyblk_status, plyblk_egstatus_lcl(NEDGE/2)
+  integer                  :: predelam
   ! loop counters
   integer :: i, j
 
@@ -322,6 +324,7 @@ use global_toolkit_module,    only : assembleKF
   botsurf_set = .false.
   plyblk_status       = 0
   plyblk_egstatus_lcl = 0
+  predelam    = 0
   i=0; j=0
   
   ! extract no. plyblock and no. interfaces from layup, extract total no. nodes
@@ -405,9 +408,17 @@ use global_toolkit_module,    only : assembleKF
   !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::!
   !***** integrate interface elements and assemble into global matrix *****
   !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::!
+  
+  ! extract predelam interf no. if it is passed in. 
+  ! predelam default value = 0
+  if (present(predelam_interf)) predelam = predelam_interf
+  
   if (ninterfs > 0) then
   
     loop_interfs: do i = 1, ninterfs
+    
+      ! skip this interf elem if it is a precrack
+      if ( i == predelam ) cycle
     
       !----- update edge status -----
       ! extract status of this interface

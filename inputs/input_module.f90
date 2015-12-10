@@ -14,4 +14,6 @@ include 'inputs/fnm_edges.f90'
 
 include 'inputs/fnm_elems.f90'
 
+include 'inputs/fnm_predelam.f90'
+
 end module input_module
